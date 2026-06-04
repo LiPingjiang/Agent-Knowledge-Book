@@ -63,6 +63,8 @@ class TimePlugin:
 kernel.add_plugin(TimePlugin(), plugin_name="time")
 ```
 
+值得一提的是，SK 最初使用"Skill"一词来命名这一概念，后在 2023 年为对齐 OpenAI 术语而更名为"Plugin"。这一命名轮回本身反映了行业对"能力封装"概念的认知演变——关于各平台 Skill/Plugin 概念的横向对比，参见 [从工具到技能：Agent 能力扩展生态](../07-core-modules/skill-ecosystem.md)。
+
 ### Planner（规划器）
 
 Planner 是 SK 的自动编排组件，能够根据用户意图自动组合多个插件函数来完成目标。它本质上是用 LLM 进行任务规划：

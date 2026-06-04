@@ -7,7 +7,8 @@
 - [规划模块 (Planning)](./planning.md) — Agent 如何将复杂目标分解为可执行的步骤序列
 - [记忆模块 (Memory)](./memory.md) — 短期记忆、长期记忆与工作记忆的设计
 - [工具使用 (Tool Use)](./tool-use.md) — Agent 如何发现、选择和调用外部工具
-- [推理模块 (Reasoning)](./reasoning.md) — Chain-of-Thought、Tree-of-Thought 等推理策略
+- [能力扩展生态 (Skill Ecosystem)](./skill-ecosystem.md) — 从 Tool 到 Skill/Plugin 的高层封装与行业实践
+- [推理模块 (Reasoning)](./reasoning.md) — Agent 推理工程：ReAct 编排、策略路由与成本权衡
 - [反思与自我修正 (Reflection)](./reflection.md) — Agent 的自我评估与迭代改进机制
 - [上下文管理 (Context Window)](./context-management.md) — 有限上下文窗口下的信息管理策略
 - [行动执行 (Action Execution)](./action-execution.md) — 从决策到实际执行的桥接层设计

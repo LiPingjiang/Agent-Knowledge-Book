@@ -28,6 +28,8 @@ Coze 内置了丰富的插件生态，覆盖常见功能需求：搜索引擎（
 
 用户也可以通过 OpenAPI 规范快速将自有 API 封装为插件——只需提供接口文档，Coze 自动生成插件配置。
 
+Coze 的 Plugin + Workflow 双层设计是"能力封装"的典型实现——Plugin 提供原子操作，Workflow 提供编排策略，两者组合形成完整的任务执行能力。关于各平台 Plugin/Skill 生态的横向对比，参见 [从工具到技能：Agent 能力扩展生态](../07-core-modules/skill-ecosystem.md)。
+
 ### 工作流编排
 
 工作流功能是 Coze 在能力深度上的重要支撑。支持的节点类型包括：LLM 节点（多模型可选）、条件分支（if/else）、循环节点（for/while）、代码节点（Python/JavaScript）、HTTP 请求节点、数据库操作节点、变量操作节点。

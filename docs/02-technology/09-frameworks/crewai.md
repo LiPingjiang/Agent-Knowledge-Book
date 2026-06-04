@@ -166,6 +166,8 @@ def search_codebase(query: str) -> str:
     return f"找到与 '{query}' 相关的代码..."
 ```
 
+CrewAI 在 2025 年将能力扩展体系化为五种类型（Tools、MCPs、Apps、Skills、Knowledge），其中 Skills 指领域知识指令集，与 Tools 的"执行能力"形成互补。这一设计反映了行业对"能力 ≠ 工具"的认知深化——详见 [从工具到技能：Agent 能力扩展生态](../07-core-modules/skill-ecosystem.md)。
+
 ### 记忆系统
 
 CrewAI 支持短期记忆（当前任务上下文）、长期记忆（跨任务的经验积累）和实体记忆（关于特定实体的知识）：
