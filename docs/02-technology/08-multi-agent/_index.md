@@ -13,3 +13,4 @@
 - [共享记忆与知识库](./shared-memory.md) — 多 Agent 共享信息的机制
 - [任务分解与分配策略](./task-decomposition.md) — 如何将复杂任务拆分并分配给合适的 Agent
 - [冲突解决机制](./conflict-resolution.md) — 多 Agent 意见分歧时的解决策略
+- [生产部署实证](./production-deployment.md) — MAS 从 PoC 到生产的核心挑战与行业案例

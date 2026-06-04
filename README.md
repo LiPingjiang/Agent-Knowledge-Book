@@ -115,6 +115,7 @@ Agent 的"大脑"由哪些模块组成？规划、记忆、工具使用、推理
 - [框架分类与选型指南](docs/02-technology/09-frameworks/classification.md)
 - [框架对比矩阵](docs/02-technology/09-frameworks/comparison-matrix.md)
 - [LangChain / LangGraph](docs/02-technology/09-frameworks/langchain-langgraph.md)
+- [Google ADK](docs/02-technology/09-frameworks/google-adk.md)
 - [OpenAI Agents SDK](docs/02-technology/09-frameworks/openai-agents-sdk.md)
 - [Anthropic Claude Agent](docs/02-technology/09-frameworks/anthropic-claude-agent.md)
 - [AutoGen](docs/02-technology/09-frameworks/autogen.md)
