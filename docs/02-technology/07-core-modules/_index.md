@@ -15,3 +15,7 @@
 - [感知模块 (Perception/Grounding)](./perception.md) — 多模态输入的理解与接地
 - [Agent Prompt 工程](./prompt-engineering.md) — 面向 Agent 场景的 Prompt 设计方法
 - [错误恢复与容错](./error-recovery.md) — Agent 执行失败时的恢复策略
+- [任务优先级与动态调度 (Prioritization)](./prioritization.md) — 多维评估矩阵、动态优先级队列与 BabyAGI 模式
+- [学习与自适应 (Learning)](./learning-and-adaptation.md) — Agent 自我进化：Reflexion、ExpeL、MemRL 与技能库
+- [目标管理 (Goal Management)](./goal-management.md) — 目标分解、进度追踪与自动纠偏
+- [探索与发现 (Exploration)](./exploration.md) — 好奇心驱动的主动探索与能力边界扩展

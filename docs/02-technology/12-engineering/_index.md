@@ -12,3 +12,4 @@
 - [成本优化](./cost-optimization.md) — Token 消耗与 API 调用的成本控制策略
 - [流式响应与实时通信](./streaming-and-realtime.md) — SSE 协议、流式工具调用、部署配置与背压处理
 - [Prompt 与 Agent 版本管理](./versioning.md) — Prompt 迭代与 Agent 版本的管理方法
+- [编程智能体工作流 (Coding Agent)](./coding-agent-workflow.md) — 多角色编程 Agent 团队、上下文管理与 Git Hooks 集成

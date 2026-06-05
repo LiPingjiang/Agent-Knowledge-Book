@@ -13,3 +13,4 @@
 - [HumanEval 及代码 Agent 评测](./humaneval-agent.md) — 代码生成与代码 Agent 的评测方法
 - [工程实践中的评测指标](./real-world-metrics.md) — 生产环境中的 Agent 质量度量
 - [安全性评测](./safety-evaluation.md) — Agent 安全行为的评测方法
+- [轨迹评估 (Trajectory Evaluation)](./trajectory-evaluation.md) — Agent 执行路径评估：轨迹匹配、LLM-as-Judge 与 AI Contract
