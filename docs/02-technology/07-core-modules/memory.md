@@ -85,11 +85,60 @@ sequenceDiagram
 
 **Embedding 模型**：将文本转为固定维度的语义向量。常用模型包括 OpenAI text-embedding-3-small、BGE、GTE 等。选择时需权衡维度（影响存储和计算）与语义质量。
 
-**索引结构**：
+**索引结构——ANN 算法原理：**
 
-- **HNSW**（Hierarchical Navigable Small World）：基于图的索引，查询速度快，内存占用较高，适合中小规模数据
-- **IVF**（Inverted File Index）：基于聚类的索引，适合大规模数据，需要训练阶段
-- **量化压缩**（PQ/SQ）：通过量化降低存储开销，适合超大规模场景
+精确的最近邻搜索（暴力遍历）在百万级向量集上耗时无法接受，因此实际系统使用近似最近邻（Approximate Nearest Neighbor, ANN）算法。核心思想是用微小的精度损失换取数量级的速度提升。
+
+**HNSW（Hierarchical Navigable Small World）** 是当前最主流的 ANN 算法，被 Chroma、Qdrant、Milvus、pgvector 等广泛采用。其原理类比"分层高速公路网络"：
+
+```
+层 3（最稀疏）:  A ────────────────── Z       # 少量"枢纽"节点的远程连接
+层 2（中等）:    A ──── K ──── P ──── Z       # 中等密度的中程连接  
+层 1（较密）:    A ── F ── K ── N ── P ── Z   # 较密集的近程连接
+层 0（最密）:    A B C D E F G H I J K L ...   # 所有节点 + 局部连接
+```
+
+搜索过程：从最高层的随机入口开始，在当前层找到最近的邻居节点；然后"下降"到下一层，以上一层的结果为起点继续搜索；逐层下降直到最底层，最终返回 top-K 最近邻。时间复杂度 O(log N)，而暴力搜索是 O(N)。
+
+关键参数对检索质量的影响：
+
+| 参数 | 含义 | 增大效果 | 代价 |
+|------|------|---------|------|
+| M | 每个节点的连接数 | 召回率↑ | 内存↑、构建时间↑ |
+| ef_construction | 构建时的搜索宽度 | 图质量↑ | 构建时间↑ |
+| ef_search | 查询时的搜索宽度 | 召回率↑ | 查询延迟↑ |
+
+**IVF（Inverted File Index）** 适合更大规模数据（千万级+）。先用 K-Means 将向量空间划分为 N 个聚类（Voronoi cells），查询时只搜索最近的 nprobe 个聚类内的向量：
+
+```python
+# 使用 FAISS 的 IVF 索引示例
+import faiss
+
+dimension = 1536
+nlist = 1024  # 聚类数量（通常取 sqrt(N) 到 4*sqrt(N)）
+
+# 构建索引：需要训练阶段来确定聚类中心
+quantizer = faiss.IndexFlatL2(dimension)
+index = faiss.IndexIVFFlat(quantizer, dimension, nlist)
+index.train(training_vectors)  # 需要一批训练数据
+index.add(all_vectors)
+
+# 搜索：nprobe 越大越精确，但越慢
+index.nprobe = 10  # 搜索 10 个最近聚类（nlist 的 1%）
+distances, indices = index.search(query_vector, k=5)
+```
+
+**向量数据库选型参考：**
+
+| 数据库 | 索引算法 | 规模适用 | 部署模式 | 特色 |
+|--------|---------|---------|---------|------|
+| Chroma | HNSW | <100 万 | 嵌入式/单机 | 极简 API，适合原型 |
+| Qdrant | HNSW + 量化 | <1000 万 | 单机/集群 | 丰富的过滤条件、Rust 高性能 |
+| Milvus | HNSW/IVF/DiskANN | 亿级 | 分布式 | GPU 加速、企业级可靠性 |
+| Weaviate | HNSW | <1000 万 | 单机/集群 | 模块化架构、GraphQL API |
+| pgvector | HNSW/IVF | <500 万 | PostgreSQL 扩展 | 与关系数据共存，运维简单 |
+
+选型建议：如果记忆规模 <100 万条且团队追求快速迭代，Chroma 或 pgvector 是最简方案；如果需要生产级可靠性和复杂过滤（按时间、用户、重要性过滤），Qdrant 或 Milvus 是更好的选择。
 
 ### 检索增强策略
 

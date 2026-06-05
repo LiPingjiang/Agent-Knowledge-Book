@@ -106,6 +106,105 @@ model = router.select_model(
 # 返回 "gpt-4o-mini"，节省 95% 成本
 ```
 
+### 进阶：基于 ML 的智能路由
+
+规则路由的局限在于需要人工定义边界条件，且覆盖不全。更先进的方案是训练一个路由分类器，根据 query 特征自动选择最优模型：
+
+```python
+class MLModelRouter:
+    """基于分类器的智能路由（参考 RouteLLM / Martian 方案）"""
+    
+    def __init__(self, router_model_path: str):
+        # 路由模型：轻量级 BERT 或 LoRA 微调的小模型
+        # 训练数据：<query, 最优模型> 对，通过离线评估生成
+        self.router = load_model(router_model_path)
+        self.model_configs = {
+            "gpt-4o-mini": {"cost_per_1k": 0.00015, "quality_tier": 1},
+            "gpt-4o": {"cost_per_1k": 0.0025, "quality_tier": 2},
+            "claude-sonnet": {"cost_per_1k": 0.003, "quality_tier": 2},
+            "o1": {"cost_per_1k": 0.015, "quality_tier": 3},
+        }
+    
+    def route(self, query: str, quality_threshold: float = 0.8) -> str:
+        """预测每个模型完成此 query 的质量，选择满足阈值的最便宜模型"""
+        predictions = self.router.predict(query)
+        # predictions: {"gpt-4o-mini": 0.6, "gpt-4o": 0.9, "o1": 0.95}
+        
+        # 过滤满足质量阈值的模型，按成本排序
+        viable = [
+            (model, pred) for model, pred in predictions.items()
+            if pred >= quality_threshold
+        ]
+        viable.sort(key=lambda x: self.model_configs[x[0]]["cost_per_1k"])
+        
+        return viable[0][0] if viable else "gpt-4o"  # fallback 到中等模型
+    
+    def update_from_feedback(self, query: str, model: str, success: bool):
+        """基于实际执行结果更新路由模型（在线学习）"""
+        self.router.partial_fit(query, model, success)
+```
+
+路由错误的检测与纠正：当弱模型处理失败时（如输出格式错误、任务未完成），系统应自动升级到更强模型重试，并将此 case 记录为路由训练数据。生产环境建议监控每个路由路径的成功率，当某路径的失败率超过 5% 时触发告警。
+
+### Prompt Caching：利用前缀缓存降本降延迟
+
+OpenAI 和 Anthropic 都提供了 Prompt Caching 机制——当多次请求共享相同的 prompt 前缀时，缓存的 token 以大幅折扣计费，且首 token 延迟（TTFT）显著降低。
+
+**Anthropic Prompt Caching：**
+
+```python
+import anthropic
+client = anthropic.Anthropic()
+
+# 将大段不变的系统 prompt 和参考文档标记为可缓存
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    system=[
+        {
+            "type": "text",
+            "text": "你是一个代码审查 Agent...(大段系统 prompt)...",
+            "cache_control": {"type": "ephemeral"}  # 标记为可缓存
+        },
+        {
+            "type": "text",
+            "text": "(项目的代码规范文档，10000 tokens)...",
+            "cache_control": {"type": "ephemeral"}
+        }
+    ],
+    messages=[{"role": "user", "content": "审查这段代码: ..."}]
+)
+# 首次请求：正常计费 + 缓存写入开销（25% 溢价）
+# 后续请求：缓存命中的 token 享受 90% 折扣，TTFT 降低 ~85%
+```
+
+**设计 Prompt 结构以最大化缓存命中率：**
+
+关键原则是把不变的内容放前面（系统 prompt、参考文档、few-shot examples），把变化的内容放后面（用户消息、当前上下文）。因为缓存匹配是基于前缀的——必须从第一个 token 开始完全一致。
+
+```python
+# ✅ 好的结构设计（高缓存命中率）
+prompt_structure = [
+    # 层1：系统指令（跨所有用户不变）     → 缓存命中率 100%
+    "系统 prompt + 角色定义 + 输出格式规范",
+    # 层2：参考知识（跨同一项目不变）     → 缓存命中率 ~90%
+    "项目文档 + 代码规范 + 领域知识",
+    # 层3：对话历史（跨轮次部分不变）     → 缓存命中率 ~60%
+    "之前的对话上下文",
+    # 层4：当前请求（每次都变）           → 无缓存
+    "本次用户输入 + 当前任务描述"
+]
+
+# ❌ 差的结构设计（低缓存命中率）
+prompt_structure_bad = [
+    f"当前时间: {datetime.now()}",       # 每次都变！后续全部无法缓存
+    "系统 prompt...",
+    "参考文档...",
+]
+```
+
+**成本影响量化：** 以一个代码审查 Agent 为例，系统 prompt + 代码规范约 8000 tokens。如果每天处理 100 个审查请求，Prompt Caching 可将这 8000 tokens 的 input 成本降低 90%（从 $2.4/天 降至 $0.24/天），同时 TTFT 从 ~2s 降至 ~0.3s。
+
 ## 策略二：多层缓存
 
 ```mermaid

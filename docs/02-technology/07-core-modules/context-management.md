@@ -324,6 +324,102 @@ class RAGContextManager:
         return enriched
 ```
 
+### RAG 工程细节：从检索到生成的关键技术选型
+
+**文档分块（Chunking）策略对比：**
+
+分块是 RAG 管道的第一步，直接决定检索质量。核心权衡是：块太大则包含噪声信息稀释相关性，块太小则丢失上下文导致语义不完整。
+
+| 策略 | 块大小 | 优势 | 劣势 | 适用场景 |
+|------|--------|------|------|---------|
+| 固定大小分块 | 256-512 tokens | 实现简单，效率高 | 可能在句中切断 | 通用文本，快速原型 |
+| 递归分块（LangChain 默认） | 200-1000 tokens | 按段落/句子边界切分 | 块大小不均匀 | 结构化文档 |
+| 语义分块 | 动态 | 按主题语义切分 | 计算成本高（需 embedding） | 长篇混合主题文档 |
+| 父子文档分块 | 小块检索 + 大块返回 | 检索精确且上下文完整 | 存储翻倍 | 需要精确定位又要上下文 |
+
+```python
+# 父子文档分块示例：小块用于检索，大块用于返回
+class ParentChildChunker:
+    def chunk(self, document: str) -> list[dict]:
+        # 大块：按段落切分（~1000 tokens）
+        parent_chunks = split_by_paragraphs(document, max_tokens=1000)
+        
+        all_chunks = []
+        for parent in parent_chunks:
+            # 小块：在大块内按句子切分（~200 tokens）
+            children = split_by_sentences(parent.text, max_tokens=200)
+            for child in children:
+                all_chunks.append({
+                    "text": child,
+                    "parent_text": parent.text,  # 检索命中时返回完整父块
+                    "embedding": embed(child)     # 只对小块做 embedding
+                })
+        return all_chunks
+```
+
+**Embedding 模型选型指南：**
+
+| 模型 | 维度 | MTEB 得分 | 延迟 | 成本 | 推荐场景 |
+|------|------|-----------|------|------|---------|
+| OpenAI text-embedding-3-large | 3072 | ~65 | 中 | $0.13/1M tokens | 英文为主，追求质量 |
+| OpenAI text-embedding-3-small | 1536 | ~62 | 低 | $0.02/1M tokens | 成本敏感，快速原型 |
+| Cohere embed-v3 | 1024 | ~66 | 中 | $0.1/1M tokens | 多语言，支持检索/分类模式切换 |
+| BGE-M3（开源） | 1024 | ~64 | 自控 | 自部署成本 | 自主可控，中英文混合 |
+| GTE-Qwen2（开源） | 1536 | ~67 | 自控 | 自部署成本 | 中文场景最优开源选择 |
+
+维度选择的工程影响：高维度带来更丰富的语义表达，但存储和检索成本线性增长。OpenAI 的 `text-embedding-3` 支持 `dimensions` 参数降维（如 3072→256），可在质量和成本间灵活权衡。
+
+**Reranking（精排）——提升检索质量的关键一步：**
+
+向量检索（ANN）的召回率虽高，但排序精度有限（余弦相似度是"近似"相关性）。Cross-encoder Reranker 对 query-document 对做精细的注意力交互，能显著提升 top-K 排序质量：
+
+```python
+class RAGPipelineWithReranker:
+    """检索 → 精排 → 生成 的完整 RAG 管道"""
+    
+    async def retrieve_and_rank(self, query: str, top_k: int = 5) -> list[str]:
+        # 第1步：向量检索 — 粗召回（fast，候选集大）
+        candidates = await self.vector_store.search(query, top_k=20)
+        
+        # 第2步：Cross-encoder 精排（slow，但精确）
+        # Reranker 模型：Cohere rerank-v3、BGE-reranker-v2、ms-marco-MiniLM
+        scored = self.reranker.rank(query, [c.text for c in candidates])
+        
+        # 第3步：取 top-K 高分结果
+        top_results = sorted(scored, key=lambda x: x.score, reverse=True)[:top_k]
+        return [r.text for r in top_results]
+```
+
+Reranking 的典型收益：在 top-5 的 NDCG@5 指标上提升 10-25%。代价是增加 50-200ms 延迟（取决于候选集大小和模型）。
+
+**多路召回融合（Hybrid Search）：**
+
+单纯的向量检索对精确关键词匹配（如错误码、函数名）效果差；单纯的关键词检索又无法理解语义同义。生产系统通常采用混合检索：
+
+```python
+class HybridRetriever:
+    """Dense + Sparse 混合检索"""
+    
+    async def search(self, query: str, top_k: int = 10) -> list:
+        # Dense 检索（语义相似度）
+        dense_results = await self.vector_store.search(query, top_k=top_k * 2)
+        
+        # Sparse 检索（BM25 关键词匹配）
+        sparse_results = await self.bm25_index.search(query, top_k=top_k * 2)
+        
+        # 融合排序（Reciprocal Rank Fusion）
+        return self._rrf_merge(dense_results, sparse_results, top_k=top_k)
+    
+    def _rrf_merge(self, *result_lists, top_k: int, k: int = 60) -> list:
+        """RRF 融合：对每个结果在各检索路中的排名取倒数加权"""
+        scores = {}
+        for results in result_lists:
+            for rank, doc in enumerate(results):
+                scores[doc.id] = scores.get(doc.id, 0) + 1 / (k + rank + 1)
+        sorted_docs = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return [doc_id for doc_id, _ in sorted_docs[:top_k]]
+```
+
 ### RAG 与直接上下文的权衡
 
 | 方式 | 优势 | 劣势 |

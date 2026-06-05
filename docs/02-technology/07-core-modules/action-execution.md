@@ -123,6 +123,129 @@ class ParallelExecutor:
         ]
 ```
 
+### Agent 并发编程模型深入
+
+Agent 系统的并发复杂度远超普通 Web 服务，因为它需要在"LLM 推理"和"工具执行"两种异步操作之间协调，且存在动态的依赖关系（后续步骤依赖前序结果）。
+
+**依赖图解析——自动识别可并行任务：**
+
+当 Agent 规划器生成一组待执行任务时，不是所有任务都能并行。需要分析任务间的依赖关系，将独立任务并行化：
+
+```python
+from dataclasses import dataclass, field
+import asyncio
+
+@dataclass
+class TaskNode:
+    id: str
+    action: Action
+    dependencies: list[str] = field(default_factory=list)  # 依赖的任务 ID
+    result: ActionResult | None = None
+
+class DependencyGraphExecutor:
+    """基于依赖图的并行执行器"""
+    
+    async def execute(self, tasks: list[TaskNode]) -> dict[str, ActionResult]:
+        completed: dict[str, ActionResult] = {}
+        pending = {t.id: t for t in tasks}
+        
+        while pending:
+            # 找出所有依赖已满足的任务（可并行执行）
+            ready = [
+                t for t in pending.values()
+                if all(dep in completed for dep in t.dependencies)
+            ]
+            
+            if not ready:
+                raise RuntimeError("循环依赖或死锁")
+            
+            # 并行执行所有就绪任务
+            results = await asyncio.gather(*[
+                self._execute_with_context(t, completed) for t in ready
+            ])
+            
+            for task, result in zip(ready, results):
+                completed[task.id] = result
+                del pending[task.id]
+        
+        return completed
+    
+    async def _execute_with_context(self, task: TaskNode, 
+                                      prior_results: dict) -> ActionResult:
+        """执行任务，注入前序任务的结果作为上下文"""
+        context = {dep: prior_results[dep] for dep in task.dependencies}
+        return await self._execute_single(task.action, context=context)
+```
+
+**并发 LLM 调用的 Rate Limit 协调：**
+
+当多个 Agent 或子任务并发调用同一 LLM API 时，需要全局协调以避免触发 rate limit。关键设计是共享一个进程级（或分布式）的限流器实例：
+
+```python
+# 全局单例限流器，所有并发 Agent 共享
+_global_rate_limiter = None
+
+def get_rate_limiter() -> RateLimiter:
+    global _global_rate_limiter
+    if _global_rate_limiter is None:
+        _global_rate_limiter = RateLimiter(
+            requests_per_minute=500,   # 按 API plan 的 80% 设置
+            tokens_per_minute=150000
+        )
+    return _global_rate_limiter
+
+class ConcurrentAgentPool:
+    """并发 Agent 池，共享 rate limit 预算"""
+    
+    def __init__(self, max_agents: int = 10):
+        self.semaphore = asyncio.Semaphore(max_agents)
+        self.limiter = get_rate_limiter()
+    
+    async def run_agent(self, agent, task: str) -> str:
+        async with self.semaphore:
+            # 每次 LLM 调用前获取许可
+            await self.limiter.acquire(estimated_tokens=2000)
+            return await agent.execute(task)
+    
+    async def run_batch(self, agents_and_tasks: list[tuple]) -> list:
+        """批量并发执行多个 Agent 任务"""
+        return await asyncio.gather(*[
+            self.run_agent(agent, task) 
+            for agent, task in agents_and_tasks
+        ])
+```
+
+**多 Agent 并发的资源竞争：**
+
+当多个 Agent 同时操作共享资源（如同一个文件系统、同一个数据库）时，需要协调机制防止冲突：
+
+```python
+class ResourceLockManager:
+    """Agent 级别的资源锁管理（乐观锁 + 冲突检测）"""
+    
+    def __init__(self):
+        self._locks: dict[str, asyncio.Lock] = {}
+    
+    async def acquire(self, resource_id: str, agent_id: str, timeout: float = 30):
+        """获取资源的排他访问权"""
+        if resource_id not in self._locks:
+            self._locks[resource_id] = asyncio.Lock()
+        
+        try:
+            await asyncio.wait_for(
+                self._locks[resource_id].acquire(), timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            raise ResourceConflictError(
+                f"Agent {agent_id} 无法获取资源 {resource_id} 的锁，"
+                f"可能被其他 Agent 长期占用"
+            )
+    
+    def release(self, resource_id: str):
+        if resource_id in self._locks:
+            self._locks[resource_id].release()
+```
+
 ### 条件执行（Conditional Execution）
 
 根据前置条件或前一步结果决定是否执行：

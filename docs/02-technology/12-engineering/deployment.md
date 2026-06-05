@@ -224,6 +224,104 @@ spec:
             - containerPort: 8000
 ```
 
+### vLLM 核心技术原理
+
+vLLM 是当前最主流的 LLM 推理引擎，其性能优势来源于几项关键技术：
+
+**PagedAttention——类比操作系统虚拟内存分页：**
+
+传统推理框架为每个请求的 KV Cache 预分配一整块连续内存（按 max_seq_len 分配）。这导致严重的内存碎片和浪费——大多数请求实际使用的序列长度远小于最大值。
+
+PagedAttention 将 KV Cache 分为固定大小的"页"（通常 16 tokens/页），按需分配。就像操作系统的虚拟内存不需要物理内存连续一样，一个请求的 KV Cache 可以分散在 GPU 内存的任意位置，通过页表映射。这将 GPU 内存利用率从 ~50% 提升到 ~95%，直接意味着相同硬件能服务更多并发请求。
+
+**Continuous Batching——消除"木桶效应"：**
+
+静态批处理（static batching）中，一批请求必须全部完成才能处理下一批。如果一个请求需要生成 500 tokens，而其他只需 20 tokens，整批都要等最长的那个。Continuous Batching 允许已完成的请求立即释放资源、新请求立即加入正在运行的批次，吞吐量提升 2-4 倍。
+
+**Tensor Parallelism vs Pipeline Parallelism 选型：**
+
+| 并行策略 | 原理 | 适用场景 | 延迟影响 |
+|---------|------|---------|---------|
+| Tensor Parallelism（TP） | 将每层的权重矩阵切分到多张 GPU | 单请求低延迟（GPU 间通信频繁但数据量小） | 延迟低，需高速互联（NVLink） |
+| Pipeline Parallelism（PP） | 将不同层分配到不同 GPU | 高吞吐（GPU 间通信少，micro-batch 流水线） | 延迟较高（有 pipeline bubble） |
+
+对 Agent 场景的建议：Agent 请求通常是串行的（等上一步结果才能执行下一步），低延迟比高吞吐更重要，因此优先使用 Tensor Parallelism。典型配置：70B 模型用 4×A100-80G + TP=4。
+
+**KV Cache 对 Agent 长对话的影响：**
+
+Agent 的多轮工具调用会累积很长的对话历史（系统 prompt + 多轮 user/assistant/tool 消息），KV Cache 占用随序列长度线性增长。当 `max-model-len` 设置过高时，可服务的并发数骤降。建议通过上下文压缩（参见上下文管理章节）将实际送入模型的 token 数控制在合理范围，而非无限增长。
+
+### LLM API 连接管理
+
+Agent 系统频繁调用 LLM API（一次任务可能包含 5-20 次 LLM 请求），连接管理直接影响端到端延迟和系统稳定性：
+
+```python
+import httpx
+from openai import AsyncOpenAI
+
+# 推荐：使用连接池复用 HTTP 连接
+# OpenAI Python SDK 内部使用 httpx，默认连接池大小为 100
+client = AsyncOpenAI(
+    http_client=httpx.AsyncClient(
+        limits=httpx.Limits(
+            max_connections=100,         # 连接池上限
+            max_keepalive_connections=20, # 保持活跃的连接数
+            keepalive_expiry=30          # 空闲连接过期时间（秒）
+        ),
+        timeout=httpx.Timeout(
+            connect=5.0,     # 连接超时
+            read=300.0,      # 读取超时（Agent 可能思考很久）
+            write=10.0,      # 写入超时
+            pool=10.0        # 等待连接池可用连接的超时
+        ),
+        http2=True  # 启用 HTTP/2 多路复用——关键优化
+    )
+)
+```
+
+HTTP/2 多路复用对 Agent 并发调用的优势：HTTP/1.1 下，一个 TCP 连接同时只能处理一个请求（head-of-line blocking）。如果 Agent 需要并行发起 3 个 LLM 请求（如 Parallelization 模式），需要 3 个 TCP 连接。HTTP/2 允许单个连接上多路复用多个请求流，减少连接建立开销和端口占用。
+
+**Rate Limit 管理：**
+
+Agent 并发执行时容易触发 API rate limit。建议实现令牌桶或滑动窗口限流器：
+
+```python
+import asyncio
+import time
+
+class RateLimiter:
+    """令牌桶限流器，适配 LLM API 的 RPM/TPM 限制"""
+    
+    def __init__(self, requests_per_minute: int = 60, tokens_per_minute: int = 90000):
+        self.rpm_limit = requests_per_minute
+        self.tpm_limit = tokens_per_minute
+        self.request_timestamps: list[float] = []
+        self.token_usage: list[tuple[float, int]] = []
+        self._lock = asyncio.Lock()
+    
+    async def acquire(self, estimated_tokens: int = 1000):
+        """获取发送许可，必要时等待"""
+        async with self._lock:
+            now = time.time()
+            # 清理 60s 前的记录
+            self.request_timestamps = [t for t in self.request_timestamps if now - t < 60]
+            self.token_usage = [(t, n) for t, n in self.token_usage if now - t < 60]
+            
+            # 检查 RPM
+            if len(self.request_timestamps) >= self.rpm_limit:
+                wait_time = 60 - (now - self.request_timestamps[0])
+                await asyncio.sleep(wait_time)
+            
+            # 检查 TPM
+            current_tokens = sum(n for _, n in self.token_usage)
+            if current_tokens + estimated_tokens > self.tpm_limit:
+                wait_time = 60 - (now - self.token_usage[0][0])
+                await asyncio.sleep(wait_time)
+            
+            self.request_timestamps.append(time.time())
+            self.token_usage.append((time.time(), estimated_tokens))
+```
+
 ## 环境配置管理
 
 ```python

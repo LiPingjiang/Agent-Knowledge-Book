@@ -10,4 +10,5 @@
 - [部署架构](./deployment.md) — Agent 系统的生产部署方案
 - [可观测性](./observability.md) — 日志、指标与链路追踪的设计
 - [成本优化](./cost-optimization.md) — Token 消耗与 API 调用的成本控制策略
+- [流式响应与实时通信](./streaming-and-realtime.md) — SSE 协议、流式工具调用、部署配置与背压处理
 - [Prompt 与 Agent 版本管理](./versioning.md) — Prompt 迭代与 Agent 版本的管理方法

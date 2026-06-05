@@ -162,6 +162,152 @@ reasoning_schema = {
 
 结构化输出使推理过程可被程序化地检查和利用，是 Agent 系统可靠运行的基础。它确保了 Agent 的推理结果能被下游的执行引擎正确解析和执行。
 
+### 技术实现：各厂商 Structured Output 对比
+
+结构化输出在 API 层面有两条技术路线：**约束解码（Constrained Decoding）** 和 **后处理校验（Post-hoc Validation）**。前者从 token 采样阶段就施加约束，保证 100% 格式合规；后者依赖模型"自觉"遵循格式，输出后再验证。
+
+**OpenAI 的实现：**
+
+```python
+from openai import OpenAI
+client = OpenAI()
+
+# 方式1：json_object 模式（后处理校验，不保证 Schema 合规）
+response = client.chat.completions.create(
+    model="gpt-4o",
+    response_format={"type": "json_object"},
+    messages=[{"role": "user", "content": "以JSON格式返回分析结果"}]
+)
+
+# 方式2：json_schema 模式（约束解码，100% Schema 合规，推荐）
+response = client.chat.completions.create(
+    model="gpt-4o-2024-08-06",
+    response_format={
+        "type": "json_schema",
+        "json_schema": {
+            "name": "agent_decision",
+            "strict": True,  # 启用严格模式，保证输出完全匹配 Schema
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "analysis": {"type": "string"},
+                    "decision": {"type": "string", "enum": ["proceed", "ask_user", "abort"]},
+                    "tool_call": {
+                        "type": ["object", "null"],
+                        "properties": {
+                            "name": {"type": "string"},
+                            "arguments": {"type": "object"}
+                        }
+                    }
+                },
+                "required": ["analysis", "decision"],
+                "additionalProperties": False
+            }
+        }
+    },
+    messages=[...]
+)
+```
+
+`strict: True` 模式下，OpenAI 在首次请求时编译 Schema 为 Context-Free Grammar（CFG），后续的 token 采样严格遵循该语法——每个 token 的 logit 中只保留符合当前语法状态的候选词，从根本上杜绝格式错误。代价是首次请求有 Schema 编译延迟（约 1-10s，之后被缓存），且不支持所有 JSON Schema 特性（如 `pattern`、`minItems` 等动态约束）。
+
+**Anthropic 的实现：**
+
+Anthropic 不提供原生的 `response_format` 参数，而是通过 Tool Use 机制实现结构化输出：
+
+```python
+import anthropic
+client = anthropic.Anthropic()
+
+# 通过定义一个"虚拟工具"来约束输出格式
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    tools=[{
+        "name": "agent_decision",
+        "description": "输出Agent的决策结果",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "analysis": {"type": "string", "description": "推理过程"},
+                "decision": {"type": "string", "enum": ["proceed", "ask_user", "abort"]},
+            },
+            "required": ["analysis", "decision"]
+        }
+    }],
+    tool_choice={"type": "tool", "name": "agent_decision"},  # 强制调用该工具
+    messages=[...]
+)
+# 从 tool_use content block 中提取结构化结果
+decision = response.content[0].input  # 已是合规的 dict
+```
+
+**开源方案——约束解码引擎：**
+
+对于自部署模型（vLLM、SGLang），可使用 Outlines 或 Guidance 实现约束解码：
+
+```python
+import outlines
+
+# Outlines 将 JSON Schema 编译为有限状态机（FSM）
+# 在 token 采样时，只允许当前 FSM 状态可接受的 token
+model = outlines.models.vllm("meta-llama/Llama-3-8B-Instruct")
+generator = outlines.generate.json(model, schema=reasoning_schema)
+result = generator("分析当前任务并给出决策...")
+# result 保证是合规的 Python dict
+```
+
+Outlines 的核心原理是将 JSON Schema → 正则表达式 → 确定性有限自动机（DFA）。每生成一个 token，根据 DFA 的当前状态计算合法的下一步 token 集合，将其他 token 的 logit 设为 -∞。这种方法零额外延迟（token 级过滤与采样同步进行），但对复杂嵌套 Schema 会产生较大的 DFA 状态空间。
+
+**技术选型决策：**
+
+| 场景 | 推荐方案 | 理由 |
+|------|---------|------|
+| 使用 OpenAI API | `json_schema` + `strict: True` | 100% 合规，无需客户端校验 |
+| 使用 Anthropic API | Tool Use + `tool_choice` 强制 | 官方推荐路径，合规率 > 99% |
+| 自部署开源模型 | vLLM + Outlines | 引擎级约束，性能最优 |
+| 需要流式解析 | 后处理校验 + 增量 JSON Parser | 约束解码与流式部分兼容，但需特殊处理 |
+| Schema 含动态约束 | 后处理校验 + Pydantic | `strict` 模式不支持 `pattern`/`minItems` |
+
+**容错策略——当结构化输出仍然失败时：**
+
+即使使用约束解码，也存在模型拒绝生成（refusal）或超出 `max_tokens` 导致截断的情况。生产系统需要实现分层容错：
+
+```python
+import json
+from pydantic import BaseModel, ValidationError
+
+class AgentDecision(BaseModel):
+    analysis: str
+    decision: str
+    tool_call: dict | None = None
+
+def parse_structured_output(raw_output: str, retries: int = 2) -> AgentDecision:
+    """分层容错的结构化输出解析"""
+    # 第1层：直接解析（约束解码应该在此成功）
+    try:
+        return AgentDecision.model_validate_json(raw_output)
+    except (json.JSONDecodeError, ValidationError):
+        pass
+    
+    # 第2层：修复常见格式错误（截断、多余文本包裹）
+    import re
+    json_match = re.search(r'\{.*\}', raw_output, re.DOTALL)
+    if json_match:
+        try:
+            return AgentDecision.model_validate_json(json_match.group())
+        except (json.JSONDecodeError, ValidationError):
+            pass
+    
+    # 第3层：重试请求（可切换为更强模型）
+    if retries > 0:
+        new_output = call_llm_with_stricter_prompt(raw_output)
+        return parse_structured_output(new_output, retries - 1)
+    
+    # 第4层：降级为默认安全决策
+    return AgentDecision(analysis="解析失败，采用安全默认值", decision="ask_user")
+```
+
 ### 推理与行动的解耦
 
 一个重要的工程模式是将"推理"和"行动指令"分离在输出的不同字段中：
