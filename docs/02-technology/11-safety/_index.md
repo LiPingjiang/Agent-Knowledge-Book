@@ -11,3 +11,4 @@
 - [输出验证与护栏](./output-validation.md) — Agent 输出的安全校验机制
 - [审计与日志](./audit-and-logging.md) — Agent 行为的可追溯性设计
 - [护栏工程模式 (Guardrail Patterns)](./guardrail-patterns.md) — 纵深防御架构、Pydantic 结构化护栏、Tool Call 拦截与检查点回滚
+- [Agent 鉴权与授权](./agent-authentication.md) — OAuth 2.1 演进、SSO/OIDC 委托、CIBA 后台认证、Token Exchange 换票、DPoP 持有证明、横向选型对比

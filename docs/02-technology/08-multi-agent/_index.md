@@ -15,3 +15,4 @@
 - [冲突解决机制](./conflict-resolution.md) — 多 Agent 意见分歧时的解决策略
 - [生产部署实证](./production-deployment.md) — MAS 从 PoC 到生产的核心挑战与行业案例
 - [A2A 协议 (Agent-to-Agent)](./a2a-protocol.md) — Google A2A 开放协议：Agent Card、发现机制与跨框架互操作
+- [MCP 协议深度解析](./mcp-and-protocols.md) — stdio/SSE/Streamable HTTP 传输、四种原语本质、Sampling 反向推理、能力协商、产业落地分析
