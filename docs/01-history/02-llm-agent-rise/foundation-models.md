@@ -14,7 +14,7 @@ author: "Agent Knowledge Book"
 
 ## GPT-3：涌现能力的初现（2020 年 6 月）
 
-2020 年 6 月，OpenAI 发布了 GPT-3，一个拥有 1750 亿参数的语言模型 [Brown et al., 2020]。GPT-3 最令人震惊的不是它的规模，而是一种被称为"上下文学习"（In-Context Learning, ICL）的涌现能力：无需微调，仅通过在提示中给出几个示例（Few-shot Learning），模型就能完成从未见过的任务。
+2020 年 6 月，OpenAI 发布了 GPT-3，一个拥有 1750 亿参数的语言模型 [Brown et al., 2020]。GPT-3 最令人震惊的不是它的规模，而是一种被称为"[上下文学习](../../appendix/glossary.md#in-context-learning)"（In-Context Learning, ICL）的[涌现能力](../../appendix/glossary.md#emergent-abilities)：无需微调，仅通过在提示中给出几个示例（[Few-shot Learning](../../appendix/glossary.md#few-zero-shot)），模型就能完成从未见过的任务。
 
 这种能力颠覆了传统机器学习的范式。以往，每个新任务都需要收集数据、训练模型、部署上线。GPT-3 告诉世界：一个足够大的模型，通过纯文本交互就能适应各种任务。
 
@@ -31,11 +31,11 @@ GPT-3 范式：任务定义 → 编写 Prompt → 直接使用
 
 ## InstructGPT 与 RLHF：让模型听懂人话（2022 年 1 月）
 
-2022 年 1 月，OpenAI 发表了 InstructGPT 论文 [Ouyang et al., 2022]，提出了基于人类反馈的强化学习（Reinforcement Learning from Human Feedback, RLHF）方法。
+2022 年 1 月，OpenAI 发表了 InstructGPT 论文 [Ouyang et al., 2022]，提出了基于人类反馈的强化学习（[RLHF](../../appendix/glossary.md#rlhf)）方法。
 
 这项技术的核心思想是：通过人类标注者的偏好反馈来训练奖励模型，再用强化学习优化语言模型的输出。
 
-RLHF 解决了一个关键问题——**对齐（Alignment）**。经过 RLHF 训练的模型不再只是预测下一个 token，而是学会了"遵循指令"。这个看似简单的转变，对 Agent 的发展具有决定性意义：
+RLHF 解决了一个关键问题——**对齐（Alignment）**。经过 RLHF 训练的模型不再只是预测下一个 token，而是学会了"遵循指令"。这个看似简单的转变，对 Agent 的发展具有决定性意义（参见[对齐](../../appendix/glossary.md#alignment)）：
 
 - **指令遵循**（Instruction Following）：Agent 需要模型可靠地执行指定操作
 - **输出格式控制**：Agent 需要模型按照特定格式（如 JSON）返回结果
@@ -125,9 +125,9 @@ GPT-4 之后，基座模型的竞争进入白热化阶段：
 
 理解基座模型的突破还需要理解两个关键概念：
 
-**规模定律（Scaling Laws）**：Kaplan 等人在 2020 年发现，模型性能与参数量、数据量和计算量之间存在幂律关系 [Kaplan et al., 2020]。这意味着只要持续增加规模，模型性能就会持续提升——这为"更大的模型 = 更好的 Agent"提供了理论支撑。
+**[规模定律](../../appendix/glossary.md#scaling-laws)（Scaling Laws）**：Kaplan 等人在 2020 年发现，模型性能与参数量、数据量和计算量之间存在幂律关系 [Kaplan et al., 2020]。这意味着只要持续增加规模，模型性能就会持续提升——这为"更大的模型 = 更好的 Agent"提供了理论支撑。
 
-**能力涌现（Emergent Abilities）**：Wei 等人在 2022 年的研究表明，某些能力只有在模型规模超过特定阈值后才会突然出现 [Wei et al., 2022a]。上下文学习、思维链推理、指令遵循等能力都属于涌现能力。这解释了为什么 GPT-2 时代还看不到 Agent 的可能性，而 GPT-3/4 时代突然一切都变了——能力不是线性积累的，而是在临界点突然爆发的。
+**[能力涌现](../../appendix/glossary.md#emergent-abilities)（Emergent Abilities）**：Wei 等人在 2022 年的研究表明，某些能力只有在模型规模超过特定阈值后才会突然出现 [Wei et al., 2022a]。[上下文学习](../../appendix/glossary.md#in-context-learning)、思维链推理、指令遵循等能力都属于涌现能力。这解释了为什么 GPT-2 时代还看不到 Agent 的可能性，而 GPT-3/4 时代突然一切都变了——能力不是线性积累的，而是在临界点突然爆发的。
 
 对于 Agent 的发展者而言，涌现能力带来了希望也带来了不确定性：我们无法精确预测下一代模型会涌现出什么新能力，但可以合理期待"只要规模继续增长，会有更多能力解锁"。
 

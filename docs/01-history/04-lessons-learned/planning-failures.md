@@ -9,23 +9,23 @@
 
 ### 1.1 经典 AI 规划的形式化
 
-经典 AI 规划的研究始于 STRIPS（Stanford Research Institute Problem Solver, 1971），后发展为标准化的 PDDL（Planning Domain Definition Language）表示。其核心形式化为：给定初始状态 S₀、目标状态 G、以及一组动作（Action）集合 A，求解一个动作序列 a₁, a₂, ..., aₙ 使系统从 S₀ 到达满足 G 的状态。
+经典 AI 规划的研究始于 [STRIPS](../../appendix/glossary.md#strips)（Stanford Research Institute Problem Solver, 1971），后发展为标准化的 [PDDL](../../appendix/glossary.md#pddl)（Planning Domain Definition Language）表示。其核心形式化为：给定初始状态 S₀、目标状态 G、以及一组动作（Action）集合 A，求解一个动作序列 a₁, a₂, ..., aₙ 使系统从 S₀ 到达满足 G 的状态。
 
 这个看似简单的问题在计算复杂性上极其困难：
 
-- **STRIPS 规划**的一般情况是 PSPACE-complete（Bylander, 1994）
-- **最优规划**（找到最短动作序列）在多数限制下仍是 NP-hard
-- **条件规划**（Contingent Planning）在不确定性环境下是 2-EXPTIME
+- **STRIPS 规划**的一般情况是 [PSPACE-complete](../../appendix/glossary.md#pspace-complete)（Bylander, 1994）
+- **最优规划**（找到最短动作序列）在多数限制下仍是 [NP-hard](../../appendix/glossary.md#np-hard)
+- **条件规划**（Contingent Planning）在不确定性环境下是 [2-EXPTIME](../../appendix/glossary.md#2-exptime)
 
 ### 1.2 框架问题（Frame Problem）
 
-McCarthy 和 Hayes（1969）提出的框架问题是规划的根本困难之一：当一个动作执行后，如何形式化表示"哪些状态没有改变"？在真实世界中，一个动作的副作用是无限的——推开一扇门不仅改变了门的位置，还影响了空气流动、光线分布、噪音传播等无数维度。
+McCarthy 和 Hayes（1969）提出的[框架问题](../../appendix/glossary.md#frame-problem)是规划的根本困难之一：当一个动作执行后，如何形式化表示"哪些状态没有改变"？在真实世界中，一个动作的副作用是无限的——推开一扇门不仅改变了门的位置，还影响了空气流动、光线分布、噪音传播等无数维度。
 
 这导致了所谓的"资格问题"（Qualification Problem）：要完整描述一个动作的前置条件，需要列举无限多的"正常情况假设"。
 
 ### 1.3 组合爆炸
 
-即使在简化的规划空间中，状态空间的组合爆炸也使得穷举搜索不可行。一个有 N 个布尔状态变量的问题拥有 2^N 个可能状态；一个有 K 个可选动作、规划长度为 L 的问题拥有 K^L 个候选方案。现实世界的规划空间远超这些玩具模型的规模。
+即使在简化的规划空间中，状态空间的[组合爆炸](../../appendix/glossary.md#combinatorial-explosion)也使得穷举搜索不可行。一个有 N 个布尔状态变量的问题拥有 2^N 个可能状态；一个有 K 个可选动作、规划长度为 L 的问题拥有 K^L 个候选方案。现实世界的规划空间远超这些玩具模型的规模。
 
 ### 1.4 LLM 为什么不能"真正"规划
 
@@ -133,7 +133,7 @@ plan = [
 
 ### 4.1 自回归生成 ≠ 搜索
 
-经典规划器通过在状态空间中进行系统搜索（BFS、A*、启发式搜索）来找到解，可以保证完备性和最优性。LLM 的自回归生成本质上是贪心解码（即使使用 beam search 也只是局部优化），无法实现全局最优搜索。
+经典规划器通过在状态空间中进行系统搜索（[BFS](../../appendix/glossary.md#bfs-dfs)、[A*](../../appendix/glossary.md#a-star)、[启发式搜索](../../appendix/glossary.md#heuristic)）来找到解，可以保证完备性和最优性。LLM 的自回归生成本质上是贪心解码（即使使用 beam search 也只是局部优化），无法实现全局最优搜索。
 
 ### 4.2 缺乏世界模型
 
@@ -269,7 +269,7 @@ def adaptive_planning_loop(goal, max_iterations=10):
 
 ### 5.6 MCTS + LLM
 
-借鉴 AlphaGo 的蒙特卡洛树搜索（MCTS）思路，用 LLM 替代策略网络来指导搜索方向。RAP（Reasoning via Planning, Hao et al., arXiv:2305.14992, 2023）将 LLM 同时用作世界模型和推理 Agent，通过 MCTS 在推理路径上进行结构化搜索。
+借鉴 AlphaGo 的[蒙特卡洛树搜索（MCTS）](../../appendix/glossary.md#mcts)思路，用 LLM 替代策略网络来指导搜索方向。RAP（Reasoning via Planning, Hao et al., arXiv:2305.14992, 2023）将 LLM 同时用作世界模型和推理 Agent，通过 MCTS 在推理路径上进行结构化搜索。
 
 ## 6. 核心教训总结
 
@@ -283,7 +283,7 @@ def adaptive_planning_loop(goal, max_iterations=10):
 
 **教训四：始终构建重规划能力。** 在系统设计之初就假设"计划会失败"，预留重规划的接口和触发条件。一个能快速重规划的系统远胜于一个追求"完美首次规划"的系统。
 
-**教训五：用现实约束锚定计划。** 每一步规划都应包含可执行性检查——前置条件是否满足、资源是否可用、时间是否充裕。脱离现实约束的计划只是幻想（Hallucination）。
+**教训五：用现实约束锚定计划。** 每一步规划都应包含可执行性检查——前置条件是否满足、资源是否可用、时间是否充裕。脱离现实约束的计划只是幻想（[Hallucination](../../appendix/glossary.md#hallucination)）。
 
 **教训六：分层是管理复杂性的唯一出路。** 人类处理复杂任务也依赖分层——先定战略、再定战术、最后执行细节。Agent 系统同样需要多层规划架构，每层有适当的抽象粒度和独立的失败恢复机制。
 

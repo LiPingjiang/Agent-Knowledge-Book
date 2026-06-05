@@ -34,7 +34,7 @@ author: "Agent Knowledge Book"
 
 早期的智能体通信语言 KQML（Knowledge Query and Manipulation Language）由 DARPA 资助开发 [Finin et al., 1994]。KQML 定义了一组"表演词"（Performatives），如 tell、ask、achieve 等，用于描述消息的通信意图。
 
-FIPA-ACL 在 KQML 的基础上进行了改进和标准化，其理论基础是 Searle 的言语行为理论（Speech Act Theory）——通信不仅仅是信息传递，更是一种"行为"。FIPA-ACL 定义了 22 种通信行为（Communicative Acts）：
+[FIPA-ACL](../../appendix/glossary.md#fipa-acl) 在 KQML 的基础上进行了改进和标准化，其理论基础是 Searle 的[言语行为理论（Speech Act Theory）](../../appendix/glossary.md#speech-act-theory)——通信不仅仅是信息传递，更是一种“行为”。
 
 - **inform**：告知另一个智能体某个命题为真
 - **request**：请求另一个智能体执行某个动作
@@ -65,7 +65,7 @@ FIPA 定义了一系列标准交互协议（Interaction Protocols），规定了
 
 ### 合同网协议（Contract Net Protocol）
 
-合同网协议（Contract Net Protocol, CNP）是最经典的多智能体协调机制之一 [Smith, 1980]。它模拟了现实世界中的招标-投标过程：
+[合同网协议（Contract Net Protocol, CNP）](../../appendix/glossary.md#contract-net)是最经典的多智能体协调机制之一 [Smith, 1980]。它模拟了现实世界中的招标-投标过程：
 
 ```mermaid
 sequenceDiagram
@@ -90,9 +90,9 @@ sequenceDiagram
 
 ### 拍卖机制
 
-博弈论（Game Theory）中的拍卖机制被广泛应用于多智能体资源分配。不同的拍卖形式适用于不同场景：英式拍卖（公开递增出价）适合单一物品分配；荷兰式拍卖（公开递减报价）适合快速成交；Vickrey 拍卖（密封第二价格）鼓励真实报价；组合拍卖（Combinatorial Auction）处理多物品的捆绑分配。
+博弈论（Game Theory）中的拍卖机制被广泛应用于多智能体资源分配。不同的拍卖形式适用于不同场景：英式拍卖（公开递增出价）适合单一物品分配；荷兰式拍卖（公开递减报价）适合快速成交；[Vickrey 拍卖](../../appendix/glossary.md#vickrey-auction)（密封第二价格）鼓励真实报价；[组合拍卖（Combinatorial Auction）](../../appendix/glossary.md#combinatorial-auction)处理多物品的捆绑分配。
 
-这些机制为智能体在竞争环境中的理性决策提供了理论保证——在特定条件下，可以证明某种拍卖机制能够达到社会最优或帕累托最优的分配结果。
+这些机制为智能体在竞争环境中的理性决策提供了理论保证——在特定条件下，可以证明某种拍卖机制能够达到社会最优或[帕累托最优](../../appendix/glossary.md#pareto-optimal)的分配结果。
 
 ### 协作规划与联合意图
 
@@ -118,7 +118,7 @@ Jason 是 AgentSpeak(L) 语言的开源解释器 [Bordini et al., 2007]，专门
 
 ### NetLogo
 
-NetLogo 是一个多智能体建模和模拟环境 [Wilensky, 1999]，主要用于研究和教育。它特别适合探索涌现行为（Emergent Behavior）——大量简单智能体的局部交互如何产生复杂的全局模式。经典示例包括：鸟群飞行（Flocking）模型展示了简单的对齐、聚集、分离规则如何产生逼真的群体运动；Schelling 隔离模型展示了轻微的个体偏好如何导致严重的群体隔离。
+NetLogo 是一个多智能体建模和模拟环境 [Wilensky, 1999]，主要用于研究和教育。它特别适合探索[涌现行为（Emergent Behavior）](../../appendix/glossary.md#emergent-abilities)——大量简单智能体的局部交互如何产生复杂的全局模式。经典示例包括：鸟群飞行（Flocking）模型展示了简单的对齐、聚集、分离规则如何产生逼真的群体运动；Schelling 隔离模型展示了轻微的个体偏好如何导致严重的群体隔离。
 
 ### 其他重要平台
 
@@ -162,7 +162,7 @@ Web 爬虫、邮件过滤器、个人信息管理助手等软件智能体（Soft
 
 **单体智能不足**：传统智能体的"智能"来自手工编写的规则或简单的学习算法，无法处理自然语言、理解复杂意图或在开放环境中灵活应对。没有足够的单体智能，多智能体协作的价值也就有限——协调一群"笨"智能体的收益往往不如直接构建一个更好的集中式系统。
 
-**开发成本过高**：设计智能体的知识库、通信本体（Ontology）、协调策略需要大量领域专业知识和工程投入。对于大多数实际问题，传统的客户端-服务器架构或消息队列方案更简单、更可靠。
+**开发成本过高**：设计智能体的知识库、通信[本体（Ontology）](../../appendix/glossary.md#ontology)、协调策略需要大量领域专业知识和工程投入。对于大多数实际问题，传统的客户端-服务器架构或消息队列方案更简单、更可靠。
 
 **标准过于学术化**：FIPA 标准虽然完善，但对于大多数实际应用来说过于复杂和重量级。开发者更倾向于使用简单的 REST API 或消息队列来实现服务间通信，而不是实现完整的 ACL 和交互协议。
 

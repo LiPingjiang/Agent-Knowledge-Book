@@ -79,7 +79,7 @@ sequenceDiagram
 
 ## 向量检索：长期记忆的核心引擎
 
-长期记忆的检索通常基于向量相似度搜索。核心流程是：将记忆文本通过 Embedding 模型转化为高维向量，存储在向量数据库中；查询时将当前上下文也向量化，通过近似最近邻（ANN）搜索找到最相关的记忆片段。
+长期记忆的检索通常基于向量相似度搜索。核心流程是：将记忆文本通过 [Embedding](../../appendix/glossary.md#embedding) 模型转化为高维向量，存储在向量数据库中；查询时将当前上下文也向量化，通过[近似最近邻（ANN）](../../appendix/glossary.md#ann)搜索找到最相关的记忆片段。
 
 ### 关键技术组件
 
@@ -89,7 +89,7 @@ sequenceDiagram
 
 精确的最近邻搜索（暴力遍历）在百万级向量集上耗时无法接受，因此实际系统使用近似最近邻（Approximate Nearest Neighbor, ANN）算法。核心思想是用微小的精度损失换取数量级的速度提升。
 
-**HNSW（Hierarchical Navigable Small World）** 是当前最主流的 ANN 算法，被 Chroma、Qdrant、Milvus、pgvector 等广泛采用。其原理类比"分层高速公路网络"：
+**[HNSW（Hierarchical Navigable Small World）](../../appendix/glossary.md#hnsw)** 是当前最主流的 ANN 算法，被 Chroma、Qdrant、Milvus、pgvector 等广泛采用。其原理类比"分层高速公路网络"：
 
 ```
 层 3（最稀疏）:  A ────────────────── Z       # 少量"枢纽"节点的远程连接
@@ -98,7 +98,7 @@ sequenceDiagram
 层 0（最密）:    A B C D E F G H I J K L ...   # 所有节点 + 局部连接
 ```
 
-搜索过程：从最高层的随机入口开始，在当前层找到最近的邻居节点；然后"下降"到下一层，以上一层的结果为起点继续搜索；逐层下降直到最底层，最终返回 top-K 最近邻。时间复杂度 O(log N)，而暴力搜索是 O(N)。
+搜索过程：从最高层的随机入口开始，在当前层找到最近的邻居节点；然后"下降"到下一层，以上一层的结果为起点继续搜索；逐层下降直到最底层，最终返回 top-K 最近邻。时间复杂度 [O(log N)，而暴力搜索是 O(N)](../../appendix/glossary.md#big-o)。
 
 关键参数对检索质量的影响：
 
@@ -108,7 +108,7 @@ sequenceDiagram
 | ef_construction | 构建时的搜索宽度 | 图质量↑ | 构建时间↑ |
 | ef_search | 查询时的搜索宽度 | 召回率↑ | 查询延迟↑ |
 
-**IVF（Inverted File Index）** 适合更大规模数据（千万级+）。先用 K-Means 将向量空间划分为 N 个聚类（Voronoi cells），查询时只搜索最近的 nprobe 个聚类内的向量：
+**[IVF（Inverted File Index）](../../appendix/glossary.md#ivf)** 适合更大规模数据（千万级+）。先用 [K-Means](../../appendix/glossary.md#k-means) 将向量空间划分为 N 个聚类（[Voronoi cells](../../appendix/glossary.md#voronoi)），查询时只搜索最近的 nprobe 个聚类内的向量：
 
 ```python
 # 使用 FAISS 的 IVF 索引示例
@@ -144,7 +144,7 @@ distances, indices = index.search(query_vector, k=5)
 
 单纯的向量相似度检索往往不够精确，实践中常组合以下策略：
 
-- **混合检索**：结合向量搜索与关键词搜索（BM25），取长补短
+- **混合检索**：结合向量搜索与关键词搜索（[BM25](../../appendix/glossary.md#bm25)），取长补短
 - **时间衰减**：对记忆施加时间权重，近期记忆优先
 - **重要性加权**：结合记忆的"重要性评分"调整排序
 - **多轮检索**：先粗检索再精排序（two-stage retrieval）
@@ -153,7 +153,7 @@ distances, indices = index.search(query_vector, k=5)
 
 ### RAG 式记忆
 
-最直接的实现方式是将记忆系统视为一个 RAG（Retrieval-Augmented Generation）管道：
+最直接的实现方式是将记忆系统视为一个 [RAG（Retrieval-Augmented Generation）](../../appendix/glossary.md#rag)管道：
 
 ```python
 class RAGMemory:
@@ -256,7 +256,7 @@ $$score_{final} = score_{relevance} \times e^{-\lambda \cdot \Delta t}$$
 
 ### LRU 淘汰
 
-当存储空间有限时，采用类似缓存系统的 LRU（Least Recently Used）策略淘汰最久未被访问的记忆。
+当存储空间有限时，采用类似缓存系统的 [LRU（Least Recently Used）](../../appendix/glossary.md#lru)策略淘汰最久未被访问的记忆。
 
 ### 主动遗忘
 

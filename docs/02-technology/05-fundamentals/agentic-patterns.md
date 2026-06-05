@@ -194,7 +194,7 @@ graph TD
 
 Aggregator 的策略：简单拼接、加权合并、取交集/并集等。Voting 的判断策略：多数投票、置信度加权、任一触发（用于安全审核）。
 
-**工程类比**：MapReduce 中的 Map 阶段、并发 HTTP 请求扇出（Fan-out）、分布式系统中的 Quorum 读。
+**工程类比**：[MapReduce](../../appendix/glossary.md#mapreduce) 中的 Map 阶段、并发 HTTP 请求扇出（[Fan-out](../../appendix/glossary.md#fan-out)）、分布式系统中的 [Quorum](../../appendix/glossary.md#quorum) 读。
 
 **典型示例**：
 
@@ -238,7 +238,7 @@ graph TD
 
 实现要点：Orchestrator 的 Prompt 要明确说明如何分解任务、如何描述子任务；Worker 可以是相同配置也可以针对不同子任务类型使用不同配置；Orchestrator 最终需要能够判断所有 Worker 结果是否充分回答了原始问题。
 
-**工程类比**：分布式计算中的 Master-Worker 模式、Job Scheduler（如 Airflow 动态生成 DAG）、微服务中的 Saga 编排器。
+**工程类比**：分布式计算中的 Master-Worker 模式、Job Scheduler（如 Airflow 动态生成 DAG）、微服务中的 [Saga](../../appendix/glossary.md#saga) 编排器。
 
 **典型示例**：编码 Agent 接收"重构认证模块"的指令，Orchestrator 分析后决定修改 auth.py、tests/test_auth.py、config.yaml 三个文件，分别分配给 Worker；多源信息搜集，Orchestrator 决定需要查哪些数据源，分配给 Worker 分别检索。
 
@@ -352,7 +352,7 @@ graph TD
 
 **来源**：[Shinn et al., 2023] Reflexion: Language Agents with Verbal Reinforcement Learning. NeurIPS 2023.
 
-**为什么**：传统 RL 通过更新模型权重来学习，但 LLM 的权重在推理时是冻结的。Reflexion 提出了一种"不更新权重"的学习方式——通过维护一个反思记忆缓冲区，让 Agent 在多次尝试中积累经验。这相当于给 LLM 一个可持续积累的"错题本"。
+**为什么**：传统 RL 通过更新模型权重来学习，但 LLM 的权重在推理时是冻结的。Reflexion 提出了一种"不更新权重"的学习方式——通过维护一个反思记忆缓冲区（[情节记忆](../../appendix/glossary.md#episodic-memory)），让 Agent 在多次尝试中积累经验。这相当于给 LLM 一个可持续积累的"错题本"。
 
 **什么时候用**：
 

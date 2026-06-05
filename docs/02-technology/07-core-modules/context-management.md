@@ -287,7 +287,7 @@ class HierarchicalContext:
 
 ### 检索增强生成（Retrieval-Augmented Generation）
 
-RAG 是上下文管理的重要补充，允许 Agent 动态访问大规模知识库而不需要全部载入上下文：
+[RAG](../../appendix/glossary.md#rag) 是上下文管理的重要补充，允许 Agent 动态访问大规模知识库而不需要全部载入上下文：
 
 ```python
 class RAGContextManager:

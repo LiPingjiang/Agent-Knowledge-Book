@@ -89,7 +89,7 @@ class ConstitutionalChecker:
 
 对齐可以在两个层面实施：
 
-**模型层面对齐**：通过 RLHF（Reinforcement Learning from Human Feedback）或 DPO（Direct Preference Optimization）在训练阶段将人类偏好编入模型权重。这提供了基线安全性，但无法覆盖所有运行时场景。
+**模型层面对齐**：通过 [RLHF](../../appendix/glossary.md#rlhf)（Reinforcement Learning from Human Feedback）或 [DPO](../../appendix/glossary.md#dpo)（Direct Preference Optimization）在训练阶段将人类偏好编入模型权重。这提供了基线安全性，但无法覆盖所有运行时场景。
 
 **运行时对齐**：在 Agent 执行过程中通过额外的检查、约束和监控确保行为符合预期。这更灵活，可以针对具体应用场景定制。
 
