@@ -173,3 +173,11 @@ Agent 越强大，安全越重要。从威胁建模到 Prompt 注入防御，从
 - [术语表](docs/appendix/glossary.md)
 - [框架对比总表](docs/appendix/framework-comparison.md)
 - [参考文献](docs/appendix/references.md)
+
+---
+
+## 版权声明
+
+**Copyright © 2025 李平江. All Rights Reserved.**
+
+本作品采用最严格的专有许可证发布。未经版权持有人书面授权，禁止以任何形式复制、分发、传播、修改或商业使用本作品的任何部分。详见 [LICENSE](LICENSE)。

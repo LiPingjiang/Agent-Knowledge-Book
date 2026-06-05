@@ -29,7 +29,7 @@ McCarthy 和 Hayes（1969）提出的[框架问题](../../appendix/glossary.md#f
 
 ### 1.4 LLM 为什么不能"真正"规划
 
-LLM 的核心机制是自回归的下一个 token 预测（Next-Token Prediction），而非在动作空间上的系统搜索。这意味着：
+LLM 的核心机制是[自回归](../../appendix/glossary.md#autoregressive-generation)的下一个 [token](../../appendix/glossary.md#token) 预测（Next-Token Prediction），而非在动作空间上的系统搜索。这意味着：
 
 - LLM 生成计划时本质上是在做**模式匹配**，而非**约束求解**
 - 没有内建的回溯（Backtracking）机制来纠正错误路径
@@ -133,17 +133,42 @@ plan = [
 
 ### 4.1 自回归生成 ≠ 搜索
 
-经典规划器通过在状态空间中进行系统搜索（[BFS](../../appendix/glossary.md#bfs-dfs)、[A*](../../appendix/glossary.md#a-star)、[启发式搜索](../../appendix/glossary.md#heuristic)）来找到解，可以保证完备性和最优性。LLM 的自回归生成本质上是贪心解码（即使使用 beam search 也只是局部优化），无法实现全局最优搜索。
+**什么是"生成"？** 在 AI 语境中，"生成"（Generation）指模型从训练分布中产出新内容的过程——可以是文字、图像、音频、代码，甚至蛋白质结构。它的核心含义不仅是"输出字符"，而是"创造符合某种分布的新样本"。对于语言模型来说，生成就是在词汇空间中逐步采样，产出新的文本序列。
+
+**什么是[自回归生成](../../appendix/glossary.md#autoregressive-generation)？** 自回归（Autoregressive）是一种序列生成范式：每一步的输出依赖于之前所有步骤的输出。形式化地，给定已有序列 x₁, x₂, ..., xₜ₋₁，模型预测下一个元素的概率 P(xₜ | x₁, ..., xₜ₋₁)，然后从该分布中采样得到 xₜ，将其拼接到序列末尾，循环往复直到生成结束符或达到最大长度。GPT 系列模型的"下一个 [token](../../appendix/glossary.md#token) 预测"就是自回归生成的典型实现。
+
+**除了自回归生成，还有哪些生成范式？**
+
+- **非自回归生成**（Non-Autoregressive Generation, NAR）：一次性并行生成所有位置的 token，如 BERT 风格的掩码语言模型（Masked LM）。速度快但质量通常不如自回归，因为各位置之间缺乏条件依赖。
+- **扩散模型**（Diffusion Models）：从纯噪声出发，通过逐步去噪来生成内容。在图像生成（Stable Diffusion、DALL-E 3）和音频生成中占主导。不按"从左到右"的顺序生成，而是全局逐步细化。
+- **基于能量的模型**（Energy-Based Models）：定义一个能量函数来评估输入的"合理程度"，通过采样低能量区域来生成。
+- **GAN**（Generative Adversarial Network）：通过生成器与判别器的对抗训练来生成内容。曾主导图像生成领域，后被扩散模型取代。
+- **离散扩散/掩码生成**（如 MDLM、MAR）：将扩散思想应用于离散 token 空间，一次生成部分 token 并迭代精化，是当前文本生成的前沿方向之一。
+
+**自回归生成的固有局限：** 自回归的"一步步向前写"本质决定了它无法原生支持全局搜索。经典规划器通过在状态空间中进行系统搜索（[BFS](../../appendix/glossary.md#bfs-dfs)、[A*](../../appendix/glossary.md#a-star)、[启发式搜索](../../appendix/glossary.md#heuristic)）来找到解，可以保证完备性和最优性。LLM 的自回归生成本质上是贪心解码（即使使用 beam search 也只是局部优化），无法实现全局最优搜索。每生成一个 token 就"定死"了一个决策，没有内建的回溯或并行探索能力——这正是为什么需要 Tree-of-Thought 等外部框架来弥补的原因。
 
 ### 4.2 缺乏世界模型
 
-LLM 没有显式的世界模型（World Model）来模拟动作的后果。它不能在"心理上"执行一个动作并观察结果状态，然后决定是否采纳这个动作。这与人类的心理模拟（Mental Simulation）形成鲜明对比——人类可以"在脑中"预演一个计划的效果。
+**[世界模型](../../appendix/glossary.md#world-model)**（World Model）是一个内部表示系统，能够对环境的状态转移进行预测——给定当前状态 s 和动作 a，世界模型可以预测执行动作后的下一状态 s' 及可能产生的奖励 r。它不是单一的技术概念，而是跨越多种范式的通用思想：
+
+- **物理学意义上的世界模型**：如牛顿力学方程——给定物体的位置和施加的力，预测下一时刻的位置。这不是"AI 模型"，而是人类用数学语言写下的自然规律。
+- **认知科学中的世界模型**：人类大脑维护着对外部世界的内部表征（Mental Model），允许我们进行"心理模拟"——在脑中想象"如果我把杯子推到桌边会怎样"而无需真的去推。这是人类规划能力的认知基础。
+- **强化学习中的世界模型**：一个可学习的函数 M(s,a)→(s',r)，如 Dreamer（Hafner et al., 2020）和 MuZero（Schrittwieser et al., 2020）中的神经网络，通过与环境交互的经验训练而成。Agent 在这个"学来的模拟器"中进行想象（imagination）规划，而不需要每一步都在真实环境中试错。
+- **LLM 语境下的"隐式世界模型"争议**：有研究（Li et al., 2023, "Othello-GPT"）发现 Transformer 内部可能形成了对游戏棋盘状态的线性表示，暗示 LLM 在某种程度上学到了世界的隐式表示。但这种隐式表示远不如显式世界模型可靠——它无法被主动查询、验证或用于系统性搜索。
+
+**为什么世界模型能够模拟动作后果？** 核心在于它将"执行动作"这一物理/外部过程内化为一个计算过程。拥有世界模型的系统可以做到：(1) **前瞻推演**——在实际执行前预测多步后果（"如果先 A 再 B 再 C，世界会变成什么样？"）；(2) **反事实推理**——比较不同动作路径的预期结果（"如果不选 A 而选 D 呢？"）；(3) **安全搜索**——在模型中试错不会产生真实世界的代价（摔坏机器人、浪费 API 调用）。这正是人类下棋时"在脑中推演几步"的计算本质。
+
+LLM 没有这种显式的世界模型。它不能在"心理上"执行一个动作并观察结果状态，然后决定是否采纳这个动作。自回归生成是单向的——LLM 在写出"步骤 3"时无法真正"预见"步骤 3 执行后的环境变化，它只是基于统计模式预测"步骤 3 之后通常会写什么"。这是 LLM 规划能力薄弱的根本原因之一：没有内部模拟器来验证计划的可行性。
 
 ### 4.3 无内建回溯机制
 
 当 LLM 生成计划的第 5 步时发现与第 2 步矛盾，它无法自动回到第 2 步修改。自回归生成是单向的——除非通过外部设计（如让 LLM 重新审视并修改整个计划），否则不具备回溯能力。
 
 ### 4.4 上下文窗口作为规划视野的硬约束
+
+**[上下文窗口](../../appendix/glossary.md#context-window)**（Context Window）是 [Transformer](../../appendix/glossary.md#transformer) 模型一次能"看到"的文本总量上限，以 [token](../../appendix/glossary.md#token) 为单位衡量（如 GPT-4 Turbo 为 128K token）。它是模型注意力机制的物理边界——超出窗口的信息对模型不可见，完全不存在。
+
+**上下文窗口 vs. [Prompt](../../appendix/glossary.md#prompt) 的区别：** 两者常被混淆但含义不同。Prompt 是用户/系统主动"喂给"模型的输入文本——包括系统指令（System Prompt）、用户消息（User Prompt）、对话历史、检索到的参考文档等。上下文窗口则是容纳这一切的"容器"的总容量——它等于 Prompt（输入）+ Completion（模型生成的输出）的 token 总和上限。打个比方：Prompt 是你往杯子里倒的水，Context Window 是杯子本身的容积。杯子大小是固定的（由模型架构决定），而你选择往里倒什么水（Prompt 的内容和组织方式）则是 Prompt Engineering 的核心工作。
 
 Context Window 的物理限制直接约束了规划能力：
 
@@ -153,7 +178,7 @@ Context Window 的物理限制直接约束了规划能力：
 
 ### 4.5 位置偏差（Positional Bias）
 
-研究表明 Transformer 对输入序列存在位置偏差——位于序列开头和结尾的信息获得更多注意力，中间部分容易被忽略（"Lost in the Middle", Liu et al., arXiv:2307.03172, 2023）。对于规划而言，这意味着计划的中间步骤最容易出现质量退化。
+研究表明 [Transformer](../../appendix/glossary.md#transformer) 对输入序列存在位置偏差——位于序列开头和结尾的信息获得更多[注意力](../../appendix/glossary.md#self-attention)，中间部分容易被忽略（"Lost in the Middle", Liu et al., arXiv:2307.03172, 2023）。对于规划而言，这意味着计划的中间步骤最容易出现质量退化。
 
 ## 5. 突破方向与工程解法
 
@@ -192,7 +217,17 @@ graph TD
 
 ### 5.2 思维树与思维图
 
-**Tree-of-Thought（ToT）**（Yao et al., arXiv:2305.10601, 2023）将线性的思维链扩展为树状搜索结构，允许在多个规划分支间进行评估和选择：
+**Tree-of-Thought（ToT）**（Yao et al., arXiv:2305.10601, 2023）将线性的思维链扩展为树状搜索结构，允许在多个规划分支间进行评估和选择。关于 ToT 的完整技术实现细节（包括思维生成器、状态评估器和搜索算法的工程实现），参见 [规划模块：Tree of Thoughts](../../02-technology/07-core-modules/planning.md#tree-of-thoughts思维树)。
+
+**工程实现原理：** ToT 的"树状分支"在实际工程中确实是通过不同的 prompt 引导出不同的解法路径来实现的。具体而言：
+
+1. **思维生成**（分支扩展）：对同一个问题状态，用类似 "请提出 3 种不同的下一步方案" 的 prompt 让 LLM 一次性输出多个候选方案。每个方案成为树的一个子节点。工程实现上可以是多次独立调用（不同 temperature 或 system prompt），也可以是一次调用要求列举多个选项。
+2. **状态评估**（剪枝）：这是 ToT 的关键——如何判断哪个分支更有前途？评估函数有两种主要实现方式：
+   - **LLM 自评估**：用另一个 prompt 让 LLM 对每个候选方案打分。例如 prompt 为 "给定目标 X 和当前方案 Y，请评估该方案的可行性（1-10 分）并说明理由"。这本质上是"用 LLM 生成方案，再用 LLM 评审方案"。
+   - **投票机制**：让 LLM 多次独立评估同一个方案，取多数票或平均分，减少单次评估的噪声。
+3. **搜索控制**：用 BFS（保留当前层所有节点的最优 k 个）或 DFS（沿一条路径深入，不行就回溯）来遍历树。
+
+**"LLM 评审 LLM"的能力上限问题：** 你的直觉是对的——如果 LLM 既是方案生成者又是评审者，最终能力上限确实受 LLM 本身制约。但实际效果仍然优于直接生成，原因在于：评估比生成简单。验证一个方案是否有逻辑漏洞（判别性任务）比从零开始生成一个完美方案（生成性任务）在认知上要容易得多——就像检查一篇文章的错误比写出一篇完美文章更容易。此外，通过多个候选方案的对比评估，LLM 有了"参照系"，比绝对评分更可靠。
 
 ```python
 # Tree-of-Thought 规划的简化伪代码
@@ -200,13 +235,14 @@ def tree_of_thought_plan(problem, max_depth=5, branch_factor=3):
     root = generate_initial_thoughts(problem, n=branch_factor)
     
     for depth in range(max_depth):
-        # 对每个当前节点生成多个后续步骤
+        # 对每个当前节点生成多个后续步骤（不同 prompt 引导不同方向）
         candidates = []
         for node in current_frontier:
             next_steps = generate_next_steps(node, n=branch_factor)
             candidates.extend(next_steps)
         
         # 使用评估函数筛选最有前途的节点
+        # 实现方式：让 LLM 阅读每个方案并打分，或让多个 LLM 实例投票
         scores = evaluate_candidates(candidates, problem)
         current_frontier = select_top_k(candidates, scores, k=branch_factor)
         
@@ -215,9 +251,29 @@ def tree_of_thought_plan(problem, max_depth=5, branch_factor=3):
             return extract_plan(best_solution_node)
     
     return best_partial_plan(current_frontier)
+
+# 评估函数的典型实现——LLM-as-Judge
+def evaluate_candidates(candidates, problem):
+    scores = []
+    for candidate in candidates:
+        # 让 LLM 从多个维度评估方案质量
+        eval_prompt = f"""
+        目标: {problem}
+        当前方案: {candidate.plan_so_far}
+        
+        请从以下维度评估该方案（每项 1-10 分）:
+        1. 可行性：每一步是否真的可执行？
+        2. 完整性：是否遗漏了关键步骤？
+        3. 效率：是否有不必要的冗余步骤？
+        
+        输出 JSON: {{"feasibility": X, "completeness": Y, "efficiency": Z}}
+        """
+        eval_result = llm.call(eval_prompt)
+        scores.append(weighted_average(eval_result))
+    return scores
 ```
 
-**Graph-of-Thought（GoT）**（Besta et al., arXiv:2308.09687, 2023）进一步允许节点间的合并和反馈，形成有向无环图结构。
+**Graph-of-Thought（GoT）**（Besta et al., arXiv:2308.09687, 2023）进一步允许节点间的合并和反馈，形成有向无环图结构——多个独立推理路径的部分结论可以被"合并"为一个更强的综合结论。
 
 ### 5.3 Plan → Execute → Replan 循环
 
@@ -269,7 +325,7 @@ def adaptive_planning_loop(goal, max_iterations=10):
 
 ### 5.6 MCTS + LLM
 
-借鉴 AlphaGo 的[蒙特卡洛树搜索（MCTS）](../../appendix/glossary.md#mcts)思路，用 LLM 替代策略网络来指导搜索方向。RAP（Reasoning via Planning, Hao et al., arXiv:2305.14992, 2023）将 LLM 同时用作世界模型和推理 Agent，通过 MCTS 在推理路径上进行结构化搜索。
+借鉴 AlphaGo 的[蒙特卡洛树搜索（MCTS）](../../appendix/glossary.md#mcts)思路，用 LLM 替代策略网络来指导搜索方向。RAP（Reasoning via Planning, Hao et al., arXiv:2305.14992, 2023）将 LLM 同时用作[世界模型](../../appendix/glossary.md#world-model)和推理 Agent，通过 MCTS 在推理路径上进行结构化搜索。
 
 ## 6. 核心教训总结
 
