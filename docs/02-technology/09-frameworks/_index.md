@@ -4,6 +4,7 @@
 
 ## 本章内容
 
+- [Agent 技术栈产品全景](./agent-stack-landscape.md) — 五层技术栈模型与全产品梳理（LLM网关→框架→运行时→Harness）
 - [框架分类体系](./classification.md) — Agent 框架的分类维度与谱系图
 - [LangChain / LangGraph](./langchain-langgraph.md) — 最流行的 LLM 应用开发框架及其图编排引擎
 - [AutoGen (Microsoft)](./autogen.md) — 微软开源的多 Agent 对话框架
