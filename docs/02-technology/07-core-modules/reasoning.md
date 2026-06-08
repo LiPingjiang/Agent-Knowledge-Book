@@ -107,6 +107,75 @@ def adaptive_reasoning(query: str, llm, complexity_estimator):
         return majority_vote(responses)
 ```
 
+### 复杂度到底由谁评估？——`complexity_estimator` 的真实机制
+
+上面代码里的 `complexity_estimator.assess(query)` 是一个被刻意抽象的"黑盒"。一个很自然的问题是：这个复杂度分数到底是谁打出来的？是再调一次大模型让它"自评"，还是另有机制？答案是：**工业界存在一整套从重到轻、从启发式到学习型的方法谱系，绝不止"让 LLM 自己判断"这一种**。这件事本质上属于一个已经被系统研究并商业化的领域——**LLM 路由（LLM Routing）/ 查询难度预估（Query Difficulty Estimation）**。
+
+下面按"评估成本由低到高"排列常见机制：
+
+| 机制 | 是否需要调用 LLM | 典型延迟 | 准确性 | 代表性工业/研究实现 |
+|------|----------------|---------|--------|-------------------|
+| **启发式规则** | 否 | < 1ms | 低（但便宜） | 按 query 长度、关键词（"设计/证明/规划"）、是否含代码块、工具数量等打分 |
+| **嵌入相似度** | 仅一次 embedding | 1-10ms | 中 | 把 query 嵌入后，与一批"已知难/易样本"比对相似度（RouteLLM 的 SW ranking 即属此类） |
+| **轻量分类器** | 否（独立小模型） | 5-15ms | 中高 | BERT 分类器、矩阵分解（Matrix Factorization），RouteLLM 的核心路由器 |
+| **模型不确定性信号** | 是（被路由模型本身） | 与一次推理同量级 | 中高 | 用小模型先答，读取 logprob/熵/自洽性方差，低置信再升级到大模型（cascade） |
+| **LLM-as-Judge** | 是（额外一次调用） | 与一次推理同量级 | 高（但最贵） | 显式让一个 LLM 对 query 难度打分，常用于离线生成训练标签 |
+
+**为什么不直接用 LLM-as-Judge？** 因为路由的全部价值就在于"省钱省延迟"。如果每个 query 都先花一次大模型调用去评估难度，再决定要不要用大模型，那评估本身的开销就吃掉了路由收益。所以**真正用于线上实时路由的，几乎都是不需要调用 LLM 的轻量机制（分类器/嵌入/启发式），而 LLM-as-Judge 主要用于离线"造数据"——给训练分类器准备标签**。
+
+#### 工业级实证：RouteLLM（LMSYS, 2024）
+
+最具代表性、且开源可复现的工业方案是 LMSYS 团队的 **RouteLLM**（Ong et al., 2024）。它把"该用强模型还是弱模型"建模为一个二分类/打分问题，并给出了四种 router：
+
+- **相似度加权排序（SW ranking）**：基于 query 嵌入与历史偏好数据的相似度加权；
+- **矩阵分解（Matrix Factorization, MF）**：学习 query 与模型的隐式偏好矩阵；
+- **BERT 分类器**：用 BERT 直接对 query 做"强/弱模型"分类；
+- **因果 LLM 分类器（Causal LLM classifier）**：用一个小的因果语言模型做分类。
+
+这些 router 在约 **8 万条 Chatbot Arena 人类偏好数据**上训练。关键结果：在 MT Bench 上达到 **GPT-4 95% 质量的同时把成本降低 85% 以上**，MMLU 上节省约 45%，GSM8K 上约 35%；其中 MF router 仅用 **26% 的 GPT-4 调用量**就能保住 95% 的 GPT-4 质量（叠加 LLM-judge 增强数据后可降至 14%）。更重要的是，这些 router 训练好后**无需重新训练即可泛化到新的模型对组合**——这正是"复杂度评估"可以做成独立、可复用组件的工程依据。
+
+#### 不止路由模型，还能路由"推理策略"
+
+值得注意的是，上面 `adaptive_reasoning` 代码做的事比"选模型"更进一步——它根据复杂度选择**推理策略**（直接回答 / 单路径 CoT / 多路径自一致性）。这一方向也有研究支撑：**Route-To-Reason（RTR）** 等工作把"模型 + 推理策略（是否 CoT、是否多采样）"作为一个联合的路由空间来优化，在保持准确率的同时显著削减推理 token 开销。换句话说，本节代码里那个看似简单的 `if/elif/else`，在前沿系统中正被替换成一个学习型的"模型 × 策略"联合路由器。
+
+#### 商业化产品
+
+这一能力已经产品化：**Martian** 与 **Unify AI** 等公司提供商用的模型路由服务，按 query 实时选择性价比最优的底层模型；RouteLLM 论文也指出其开源路由器在同等质量下比这些商业方案便宜约 40%。这说明 `complexity_estimator` 不是教学用的占位符，而是一个有真实市场、真实收益的工程组件。
+
+**给 Agent 工程师的实践结论**：不要默认"复杂度只能让 LLM 自评"。线上实时路由优先选**轻量分类器 / 嵌入相似度 / 启发式规则**（毫秒级、零额外 LLM 调用）；把 **LLM-as-Judge 留给离线标注**，用它产出的标签去训练那个轻量分类器。下面给出一个把上述思路落到实处的 `complexity_estimator` 参考实现：
+
+```python
+class ComplexityEstimator:
+    """生产可用的复杂度评估器：优先零成本启发式，再叠加轻量分类器。
+
+    设计原则（源自 RouteLLM 的工程经验）：
+    - 线上路径绝不调用大模型，否则路由收益被评估开销吃掉；
+    - 启发式规则提供快速兜底，分类器提供学习型精度；
+    - 分类器的训练标签可由离线 LLM-as-Judge 产出。
+    """
+
+    def __init__(self, classifier=None):
+        # classifier: 可选的轻量分类器（如 BERT/MF），未提供时仅用启发式
+        self.classifier = classifier
+
+    def assess(self, query: str) -> float:
+        # 1) 零成本启发式信号（< 1ms）
+        score = 0.0
+        tokens = query.split()
+        if len(tokens) > 60:
+            score += 0.3                      # 长 query 通常更复杂
+        if any(k in query for k in ("设计", "架构", "证明", "规划", "优化", "权衡")):
+            score += 0.4                      # 强规划/推理意图关键词
+        if "```" in query or "def " in query:
+            score += 0.2                      # 含代码，倾向需要深度推理
+
+        # 2) 若有轻量分类器，融合其学习型判断（5-15ms，无需调用大模型）
+        if self.classifier is not None:
+            score = 0.5 * score + 0.5 * self.classifier.predict_proba(query)
+
+        return min(score, 1.0)
+```
+
 ### 模型路由：不同推理模型的分工
 
 现代 Agent 系统越来越多地采用"模型路由"架构——为不同的推理需求选择不同的模型：
@@ -396,4 +465,6 @@ Agent 推理工程的核心不是"让模型推理得更好"（那是模型层的
 - [Wang et al., 2023] "Self-Consistency Improves Chain of Thought Reasoning in Language Models"
 - [OpenAI, 2024] "Learning to Reason with LLMs" (o1 System Card)
 - [Anthropic, 2025] "Extended Thinking" 技术文档
+- [Ong et al., 2024] "RouteLLM: Learning to Route LLMs with Preference Data"（LMSYS，开源模型路由的工业级实证，含 SW/MF/BERT/Causal-LLM 四种 router）
+- [Route-To-Reason, 2025] 将"模型 + 推理策略"作为联合路由空间优化的研究方向
 - [思维链的发现与训练](../../01-history/02-llm-agent-rise/chain-of-thought.md) — LLM 推理能力的完整技术史
